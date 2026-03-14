@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: vigen
+      POSTGRES_USER: vigen
+      POSTGRES_PASSWORD: vigen
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: .
+      dockerfile: infra/backend.Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app/backend
+      - ./storage:/app/storage
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/worker.Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app/backend
+      - ./storage:/app/storage
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/frontend.Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app/frontend
+
+volumes:
+  postgres_data:
+

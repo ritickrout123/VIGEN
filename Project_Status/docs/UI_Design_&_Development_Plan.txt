@@ -1,0 +1,416 @@
+VIGEN Platform UI Design & Development Plan
+Music-Driven Video Generation Platform
+*UI/UX Design Document • v1.0*
+Prepared for the Engineering Team • March 2026
+
+1. Introduction
+This document outlines the user interface design and frontend development strategy for the VIGEN platform. The UI will be built with Next.js 14 (App Router), shadcn/ui components, Tailwind CSS, Zustand for client state, TanStack Query for server state, and Socket.IO for real‑time progress updates.
+
+A key goal of this plan is to enable parallel frontend development using fallback (mock) data before the backend APIs are fully implemented. This ensures that UI development is not blocked and that integration later is seamless.
+
+2. Design Principles
+Clarity over complexity – The user should always understand what stage their video is in and what will happen next.
+
+Progressive disclosure – Advanced options (beat‑level sync, stem splitting) are hidden behind toggles; the default path is simple.
+
+Trust through transparency – Show estimated cost, scene‑by‑scene previews, and allow approval before expensive GPU rendering.
+
+Mobile‑friendly – The web app works on tablets and phones, though the primary use case is desktop.
+
+Fast feedback – Use optimistic updates, skeleton loaders, and partial video previews to keep users engaged during long renders.
+
+3. User Flow Overview
+text
+Landing → Upload Audio → Audio Analysis → Scene Planning → Storyboard Review → GPU Rendering → Assembly → Completion → Share/Download
+                ↓                ↓               ↓                   ↓                 ↓
+           (progress)      (progress)      (approval step)     (parallel clips)   (final video)
+Core flows:
+
+First‑time user – Sees landing page, uploads a track, reviews storyboard, approves, waits for render, watches video.
+
+Returning user – Lands on dashboard, views job history, re‑downloads old videos, or starts a new job.
+
+Power user – Adjusts advanced settings, regenerates individual scenes, uses API key for integrations.
+
+4. Pages & Components
+4.1 Landing Page (/)
+Hero section with example video.
+
+Call‑to‑action: “Create your first music video” → goes to /create.
+
+Style preset gallery (static images + sample 5s clips per preset).
+
+Footer with links to docs, pricing, etc.
+
+4.2 Dashboard (/dashboard)
+List of user’s previous jobs (table or cards).
+
+Each entry shows: thumbnail (if available), audio name, duration, status, creation date, download button.
+
+“New Job” button.
+
+Pagination / infinite scroll.
+
+4.3 Create Job (/create)
+Step 1: Upload Audio
+
+Drag‑and‑drop zone (accepts MP3, WAV, FLAC up to 200 MB).
+
+Direct upload to S3 via pre‑signed URL (or simulated mock).
+
+After upload, redirect to job detail page.
+
+Step 2: Audio Analysis (automatic)
+
+Shown on job detail page – see section 4.4.
+
+Step 3: Scene Planning (automatic)
+
+Still on job detail page.
+
+Step 4: Storyboard Review (/job/[id]/review)
+
+Shows a grid of scene cards, each containing:
+
+Scene number & timestamp range.
+
+Visual prompt (editable? – Phase 2+).
+
+Mood, camera style, color palette.
+
+Placeholder image (mock or generated later).
+
+“Approve & Start Rendering” button.
+
+Option to reject and regenerate storyboard (with feedback).
+
+Step 5: Rendering Progress (/job/[id])
+
+Real‑time progress bar with stage labels.
+
+Scene‑level progress (e.g., “18 of 30 scenes complete”).
+
+Partial video preview – after first ~5 scenes are done, a low‑res preview becomes playable.
+
+Step 6: Completion (/job/[id])
+
+Embedded video player with download button.
+
+Shareable link (copy to clipboard).
+
+Option to “Create another” or “Remix this video” (edit scene prompts).
+
+4.4 Job Detail Page (/job/[id])
+This is the central hub. It changes state as the job progresses.
+
+States:
+
+Queued / Analysing – Skeleton loaders, spinning indicators.
+
+Planning – Show that storyboard is being generated.
+
+Review Needed – Show “Review storyboard” button (if not auto‑approved).
+
+Rendering – Progress bar, scene count, estimated time.
+
+Assembling – Progress bar.
+
+Complete – Video player, download button.
+
+Failed – Error message with retry option (only failed scenes).
+
+Components on this page:
+
+Header: Job title (audio file name), status badge.
+
+Progress area: Multi‑step tracker (Analysis → Planning → Rendering → Assembly → Done).
+
+Scene timeline (when rendering/complete):
+
+Horizontal scrollable list of scene thumbnails.
+
+Click scene to enlarge, see prompt, and (if complete) regenerate that scene.
+
+Video preview area:
+
+Before render: placeholder with beat visualisation.
+
+During render: partial preview as scenes finish.
+
+After render: full video player with controls.
+
+4.5 Video Player Component
+Built with React Player or native HTML5 video.
+
+Supports streaming from Cloudflare R2 (signed URLs).
+
+Includes download button, share button, and (for complete jobs) a “Regenerate scene” button that opens the scene timeline.
+
+4.6 Settings / Profile (/settings)
+API key management (for developer users).
+
+Notification preferences (email on completion).
+
+Billing / credit usage (Phase 4).
+
+5. Component Library & Styling
+We will use shadcn/ui for all base components (buttons, dialogs, forms, progress bars, etc.) and customise with Tailwind CSS.
+
+Key custom components to build:
+
+AudioUploader – handles file drop, S3 pre‑signed URL, progress.
+
+SceneGrid – displays storyboard scenes in a responsive grid.
+
+SceneCard – shows scene details, thumbnail, regeneration button.
+
+ProgressTracker – multi‑step indicator with labels.
+
+BeatVisualisation – simple waveform with beat markers (optional).
+
+VideoPlayerWithPreview – embeds video and can show partial preview.
+
+All components will be developed in isolation (Storybook optional) and accept props that can be filled with mock data.
+
+6. State Management
+6.1 Client State (Zustand)
+User session – auth token, profile info.
+
+UI state – which modal is open, theme, sidebar collapsed.
+
+Current job state – if a job is being viewed/edited, we may keep a local copy for optimistic updates.
+
+6.2 Server State (TanStack Query)
+All API requests are managed via React Query hooks.
+
+Keys:
+
+['jobs'] – list of jobs.
+
+['job', id] – single job details.
+
+['job', id, 'scenes'] – scene list.
+
+['presets'] – style presets.
+
+Mutations: createJob, uploadAudio, approveStoryboard, regenerateScene, deleteJob, etc.
+
+WebSocket updates will invalidate relevant queries or patch the cache directly.
+
+6.3 Real‑time Updates (Socket.IO)
+Connect to /ws/jobs/{id} namespace.
+
+Listen for progress events: { stage, percent, scenes_complete, scenes_total, message }.
+
+Update React Query cache for the job (e.g., set job.status, job.progress).
+
+When new scenes are rendered, the server can emit scene_complete with scene data; we append to the scenes list.
+
+7. Mock Data / Fallback Strategy
+To enable UI development before backend APIs are ready, we will create a mock service layer that intercepts API calls and returns realistic fake data. This can be toggled via an environment variable (NEXT_PUBLIC_USE_MOCKS=true).
+
+7.1 Mock API Handlers
+We will use MSW (Mock Service Worker) in the browser to intercept fetch requests. For each endpoint defined in the Developer Brief, we return mock responses.
+
+Example mock responses:
+
+GET /api/jobs – list of jobs
+json
+{
+  "jobs": [
+    {
+      "id": "job_123",
+      "audio_name": "summer_vibes.mp3",
+      "status": "complete",
+      "created_at": "2026-03-15T10:30:00Z",
+      "duration_seconds": 180,
+      "thumbnail_url": "/mock/thumb1.jpg",
+      "download_url": "/mock/video1.mp4"
+    },
+    {
+      "id": "job_456",
+      "audio_name": "night_cruising.wav",
+      "status": "rendering",
+      "created_at": "2026-03-16T14:20:00Z",
+      "duration_seconds": 300,
+      "thumbnail_url": null
+    }
+  ]
+}
+GET /api/jobs/{id} – job details
+json
+{
+  "id": "job_456",
+  "status": "rendering",
+  "current_stage": "rendering",
+  "progress_percent": 45,
+  "scenes_total": 30,
+  "scenes_complete": 14,
+  "estimated_remaining_seconds": 420,
+  "audio_url": "/mock/audio_sample.mp3",
+  "storyboard": [ ... ]  // only when in planning or later
+}
+GET /api/jobs/{id}/scenes – list of scenes
+json
+[
+  {
+    "scene_index": 0,
+    "start_time": 0.0,
+    "end_time": 5.0,
+    "visual_prompt": "A neon-lit city street at night, cyberpunk style, slow pan",
+    "camera_style": "slow_pan",
+    "color_palette": ["#ff00ff", "#00ffff", "#000000"],
+    "mood": "energetic",
+    "thumbnail_url": "/mock/scene0.jpg",
+    "video_url": "/mock/scene0.mp4",
+    "model_used": "kling",
+    "cost_usd": 0.02
+  },
+  // ... more scenes
+]
+POST /api/jobs – create job
+Accepts { audio_url, style_preset, max_duration_seconds }
+
+Returns { job_id, status: "queued" }
+
+POST /api/jobs/{id}/approve – approve storyboard
+Returns { success: true } and starts rendering (mock just updates status).
+
+POST /api/jobs/{id}/scenes/{n}/regenerate – regenerate scene
+Returns updated scene object.
+
+7.2 Sample Audio & Video Files
+We will host a few dummy MP3 and MP4 files in the /public/mock/ folder to simulate uploads and playback. For example:
+
+public/mock/audio_sample.mp3 – 30‑second demo track.
+
+public/mock/scene0.mp4 – 5‑second abstract clip.
+
+public/mock/thumb1.jpg – placeholder thumbnail.
+
+7.3 WebSocket Mocking
+In development with mocks enabled, we can simulate WebSocket messages using a setInterval that sends progress updates. This can be done by a simple mock script that connects to a local event emitter instead of a real socket.
+
+8. Integration Points with Backend
+Once the backend is ready, we replace the mock handlers with real API calls. The transition should be seamless because:
+
+All API calls are abstracted into custom hooks (e.g., useJobs, useJob, useScenes).
+
+The hooks decide whether to fetch from mock or real API based on environment.
+
+WebSocket connection is established only when real backend is available.
+
+Key integration touchpoints:
+
+Upload: Get pre‑signed URL from POST /api/upload/audio, then PUT file directly to S3.
+
+Job creation: Send audio_url (returned from upload) to POST /api/jobs.
+
+Polling vs WebSocket: Initially fallback to polling (GET /api/jobs/{id}) if WebSocket not supported; later use WebSocket for live updates.
+
+Storyboard approval: POST /api/jobs/{id}/approve (or maybe a PATCH to update status).
+
+Scene regeneration: POST /api/jobs/{id}/scenes/{n}/retry (as per API spec).
+
+Download: Use pre‑signed URL from GET /api/jobs/{id}/download.
+
+9. Development Phases for UI
+We align with the backend phases but frontend can be built ahead using mocks.
+
+Phase 1 (Weeks 1‑5) – Core Upload & Single Clip
+Landing page (static)
+
+Upload component (with mock S3)
+
+Basic job detail page – show status, progress bar (mock WebSocket)
+
+Video player for final video (mock file)
+
+No storyboard review yet.
+
+Deliverable: User can upload a file and see a mock job progress to completion, playing a dummy video.
+
+Phase 2 (Weeks 6‑11) – Music‑Driven Multi‑Scene
+Storyboard review page – grid of scene cards with mock data
+
+Scene timeline on job detail (during rendering)
+
+Partial video preview – assemble first few mock scenes
+
+Style preset selector (static list)
+
+Real‑time progress with WebSocket mock
+
+Deliverable: Full mock flow: upload → analysis (mock) → storyboard (mock) → approve → render progress → final video (mock scenes assembled).
+
+Phase 3 (Weeks 12‑18) – Long‑Form & Parallel Rendering
+Scene regeneration UI (button on scene card, modal with prompt edit)
+
+Credit / token display (if schema ready)
+
+Job history dashboard (with real data later)
+
+Email notification preference (UI only, backend mock)
+
+Deliverable: All UI components built; integration with real backend begins.
+
+Phase 4 (Weeks 19‑26) – Product Polish & Beta
+Settings page (API keys, notifications)
+
+Mobile responsiveness polish
+
+Error handling and user feedback modals
+
+Analytics (user behaviour)
+
+Beta feedback form embedded
+
+Deliverable: Production‑ready UI, fully integrated with backend, ready for beta users.
+
+10. Example Fallback Data Structures
+To ensure consistency, we will define TypeScript types for all domain objects and use them in mocks.
+
+typescript
+// types.ts
+export type JobStatus = 'queued' | 'analysing' | 'planning' | 'review' | 'rendering' | 'assembling' | 'complete' | 'failed' | 'cancelled';
+
+export interface Job {
+  id: string;
+  audioName: string;
+  audioUrl?: string;
+  status: JobStatus;
+  createdAt: string; // ISO
+  durationSeconds?: number;
+  thumbnailUrl?: string;
+  downloadUrl?: string;
+  progress?: {
+    stage: string;
+    percent: number;
+    scenesComplete: number;
+    scenesTotal: number;
+    estimatedRemainingSeconds?: number;
+  };
+  storyboard?: Scene[];
+}
+
+export interface Scene {
+  sceneIndex: number;
+  startTime: number;
+  endTime: number;
+  visualPrompt: string;
+  cameraStyle: string;
+  colorPalette: string[];
+  mood: string;
+  thumbnailUrl?: string;
+  videoUrl?: string;
+  modelUsed?: string;
+  costUsd?: number;
+  status?: 'pending' | 'rendering' | 'complete' | 'failed';
+}
+Mock data generators will create arrays of scenes with plausible values.
+
+11. Conclusion
+This UI design and development plan ensures that frontend work can start immediately using fallback data, while maintaining a clear path to integration with the backend APIs. The use of shadcn/ui, Zustand, TanStack Query, and MSW provides a robust, scalable foundation. By aligning UI features with the backend phases and incorporating key product recommendations (storyboard approval, partial preview, scene regeneration), we will deliver a user experience that is both engaging and trustworthy.
+
+The next step is to set up the Next.js project, configure shadcn/ui, implement the mock service layer, and begin building the first components.
+
