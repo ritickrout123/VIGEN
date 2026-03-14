@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     litellm_base_url: str | None = None
 
     use_mock_pipeline: bool = Field(default=True, alias="USE_MOCK_PIPELINE")
+    demo_mode: bool = Field(default=False, alias="DEMO_MODE")
     preview_scene_threshold: int = 5
     storyboard_max_scenes: int = 30
     cost_cap_usd_default: float = 20.0

@@ -14,12 +14,7 @@ from app.schemas.job import CreateJobRequest, RejectStoryboardRequest
 from app.schemas.pipeline import ProgressEvent
 from app.services.notifications import NotificationService
 from app.services.progress import progress_broker
-from app.services.providers import (
-    AudioAnalysisProvider,
-    StoryboardProvider,
-    VideoRenderProvider,
-    VideoAssemblyProvider,
-)
+from app.services.providers.factory import make_providers
 from app.services.storage import StorageService
 
 
@@ -27,11 +22,21 @@ class JobService:
     def __init__(self) -> None:
         self.settings = get_settings()
         self.storage = StorageService()
-        self.analysis_provider = AudioAnalysisProvider()
-        self.storyboard_provider = StoryboardProvider()
-        self.render_provider = VideoRenderProvider(self.storage)
-        self.assembly_provider = VideoAssemblyProvider(self.storage)
         self.notifications = NotificationService()
+        # Providers are lazy-loaded so the API thread never imports heavy
+        # ML dependencies (librosa, etc.) during job creation.
+        self._providers_loaded = False
+
+    def _load_providers(self) -> None:
+        """Initialise providers on first use (worker context only)."""
+        if not self._providers_loaded:
+            (
+                self.analysis_provider,
+                self.storyboard_provider,
+                self.render_provider,
+                self.assembly_provider,
+            ) = make_providers(self.storage)
+            self._providers_loaded = True
 
     async def create_job(
         self,
@@ -55,7 +60,7 @@ class JobService:
         await session.refresh(job)
 
         from app.workers.celery_app import celery_app
-        celery_app.send_task("jobs.analyse_and_plan", args=[job.id])
+        celery_app.send_task("jobs.analyse_and_plan", args=[str(job.id)])
         return job
 
     async def list_jobs(self, session: AsyncSession, user: User) -> list[Job]:
@@ -78,6 +83,7 @@ class JobService:
         return job
 
     async def run_analysis_and_planning(self, session: AsyncSession, job_id: str) -> Job:
+        self._load_providers()
         job = await session.scalar(select(Job).where(Job.id == job_id).options(selectinload(Job.scenes)))
         if not job:
             raise ValueError("Job not found")
@@ -216,6 +222,7 @@ class JobService:
         job_id: str,
         scene_indexes: list[int] | None = None,
     ) -> Job:
+        self._load_providers()
         job = await self.get_job_by_id(session, job_id)
         ordered_scenes = sorted(job.scenes, key=lambda item: item.scene_index)
         targets = [scene for scene in ordered_scenes if scene_indexes is None or scene.scene_index in scene_indexes]

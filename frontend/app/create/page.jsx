@@ -1,40 +1,58 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
 import { fetchPresets, uploadAudio, createJob } from "../../lib/api.js";
 import { getStoredSession } from "../../lib/auth.js";
-import { ActionLink, DragUploader, ErrorBanner, PresetCard, Skeleton } from "../../components/ui.jsx";
+import { Shell, DragUploader, PresetCard, ActionLink, ErrorBanner } from "../../components/ui.jsx";
 
 export default function CreatePage() {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
+  const [session, setSession] = useState(null);
   const [presets, setPresets] = useState([]);
   const [selectedPresetId, setSelectedPresetId] = useState(null);
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    if (!getStoredSession()) { router.push("/login"); return; }
-    setReady(true);
+    const s = getStoredSession();
+    if (!s) {
+      router.push("/login");
+      return;
+    }
+    setSession(s);
+
     fetchPresets()
       .then((data) => {
         setPresets(data);
         if (data.length > 0) setSelectedPresetId(data[0].id);
       })
-      .catch(() => setError("Failed to load style presets."));
+      .catch((err) => setError("Failed to load style presets. Check if mock mode is on if backend is down."));
   }, [router]);
 
-  async function handleStart() {
-    if (!file) { setError("Please upload an audio track first."); return; }
+  async function handleStartGeneration() {
+    if (!file) {
+      setError("Please upload an audio track first.");
+      return;
+    }
+    if (!selectedPresetId) {
+      setError("Please select a style preset.");
+      return;
+    }
+
     setError("");
     setCreating(true);
     setUploading(true);
+
     try {
+      // 1. Upload audio
       const audioData = await uploadAudio(file);
       setUploading(false);
+
+      // 2. Create job
       const job = await createJob({
         style_preset_id: selectedPresetId,
         audio_url: audioData.audio_url,
@@ -42,6 +60,8 @@ export default function CreatePage() {
         audio_duration_seconds: audioData.detected_duration_seconds,
         audio_file_size_bytes: audioData.file_size_bytes,
       });
+
+      // 3. Redirect to job status
       router.push(`/job/${job.id}`);
     } catch (err) {
       setError(err.message || "Something went wrong. Please try again.");
@@ -50,42 +70,44 @@ export default function CreatePage() {
     }
   }
 
-  if (!ready) return null;
+  if (!session) return null;
 
   return (
     <div className="vg-shell">
-      <main className="vg-page" style={{ maxWidth: "860px", margin: "0 auto" }}>
-        {/* Header */}
+      <main className="vg-page" style={{ maxWidth: "800px", margin: "0 auto" }}>
         <div>
           <p className="vg-eyebrow">Create</p>
           <h1>Generate a new music video</h1>
-          <p className="vg-secondary" style={{ marginTop: "6px" }}>
-            Upload your track and choose a cinematic style. VIGEN will analyse the beats and craft a beat-synchronized storyboard for your approval.
+          <p className="vg-lede" style={{ marginTop: "8px" }}>
+            Upload your track and choose a cinematic style. Our AI will analyze the beats, 
+            structure, and mood to craft a beat-synchronized storyboard.
           </p>
         </div>
 
-        {error && <ErrorBanner message={error} onRetry={() => setError("")} />}
-
-        {/* Step 1: Upload */}
-        <div className="vg-card">
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
-            <span className="vg-scene-num" style={{ width: "32px", height: "32px", fontSize: "0.85rem" }}>01</span>
-            <h2>Upload audio</h2>
+        {error && (
+          <div style={{ marginBottom: "24px" }}>
+            <ErrorBanner message={error} />
           </div>
-          <DragUploader file={file} onFile={setFile} uploading={uploading} />
-        </div>
+        )}
 
-        {/* Step 2: Style */}
-        <div className="vg-card">
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
-            <span className="vg-scene-num" style={{ width: "32px", height: "32px", fontSize: "0.85rem" }}>02</span>
-            <h2>Choose style</h2>
-          </div>
-          {presets.length === 0 ? (
-            <div className="vg-preset-grid">
-              {[1,2,3,4,5,6].map((i) => <Skeleton key={i} height={120} />)}
-            </div>
-          ) : (
+        <div style={{ display: "grid", gap: "32px" }}>
+          {/* Section 1: Audio Upload */}
+          <section>
+            <h2 style={{ marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ opacity: 0.3, fontSize: "0.8em" }}>01</span> Upload Audio
+            </h2>
+            <DragUploader 
+              file={file} 
+              onFile={setFile} 
+              uploading={uploading} 
+            />
+          </section>
+
+          {/* Section 2: Style Presets */}
+          <section>
+            <h2 style={{ marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ opacity: 0.3, fontSize: "0.8em" }}>02</span> Choose Style
+            </h2>
             <div className="vg-preset-grid">
               {presets.map((preset) => (
                 <PresetCard
@@ -95,23 +117,32 @@ export default function CreatePage() {
                   onSelect={setSelectedPresetId}
                 />
               ))}
+              {presets.length === 0 && !error && (
+                <p className="vg-secondary vg-small">Loading presets...</p>
+              )}
             </div>
-          )}
-        </div>
+          </section>
 
-        {/* Footer */}
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "16px", paddingBottom: "16px" }}>
-          <ActionLink href="/dashboard" secondary>Cancel</ActionLink>
-          <button
-            className="vg-btn vg-btn-lg"
-            onClick={handleStart}
-            disabled={creating || !file}
-            style={{ minWidth: "220px" }}
-          >
-            {creating
-              ? (uploading ? "Uploading audio…" : "Creating job…")
-              : "Start generation →"}
-          </button>
+          {/* Action Footer */}
+          <footer style={{ 
+            marginTop: "16px", 
+            paddingTop: "32px", 
+            borderTop: "1px solid var(--border)",
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            gap: "20px"
+          }}>
+            <ActionLink href="/dashboard" secondary>Cancel</ActionLink>
+            <button 
+              className="vg-btn vg-btn-lg" 
+              onClick={handleStartGeneration}
+              disabled={creating || !file}
+              style={{ minWidth: "200px" }}
+            >
+              {creating ? (uploading ? "Uploading..." : "Creating...") : "Start Generation →"}
+            </button>
+          </footer>
         </div>
       </main>
     </div>

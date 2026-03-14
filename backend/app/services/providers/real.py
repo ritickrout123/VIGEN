@@ -1,5 +1,8 @@
+import base64
 import io
+import json
 import logging
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from math import ceil
@@ -7,8 +10,7 @@ from pathlib import Path
 
 import httpx
 import librosa
-import subprocess
-import json
+import numpy as np
 from litellm import completion
 
 from app.core.config import get_settings
@@ -63,8 +65,8 @@ class AudioAnalysisProvider:
         onset_frames = librosa.onset.onset_detect(y=y, sr=sr, wait=sr // 2, pre_max=sr // 4, post_max=sr // 4)
         onset_times = librosa.frames_to_time(onset_frames, sr=sr).tolist()
 
-        # 5. Multimodal Intel (Gemini 2.0 Flash)
-        intel = await self._get_gemini_intel(audio_url)
+        # 5. Multimodal Intel (Gemini 2.0 Flash) — pass raw audio signal as fallback context
+        intel = await self._get_gemini_intel(audio_url, y, sr)
 
         scene_count = max(1, min(30, ceil(duration_seconds / 5)))
 
@@ -72,12 +74,11 @@ class AudioAnalysisProvider:
             "bpm": float(round(float(tempo[0] if hasattr(tempo, "__len__") else tempo), 1)),
             "beats": beat_times,
             "onsets": [float(round(float(t), 3)) for t in onset_times],
-            "mood": intel.get("mood", "energetic"),
-            "genre": intel.get("genre", "electronic"),
+            "mood": intel.get("mood") or "energetic",
+            "genre": intel.get("genre") or "electronic",
             "energy_arc": energy_arc,
-            "key": intel.get("key", "Unknown"),
+            "key": intel.get("key") or "C Major",
             "scene_count_hint": int(scene_count),
-            "audio_url": audio_url,
         }
 
     async def _load_audio(self, url: str):
@@ -104,48 +105,121 @@ class AudioAnalysisProvider:
                     # Clean up temp file
                     Path(tmp_name).unlink(missing_ok=True)
 
-    async def _get_gemini_intel(self, audio_url: str) -> dict:
-        self.logger.info(f"Calling Gemini 2.0 Flash for audio intelligence: {audio_url}")
-        
-        # In a real production setup with Gemini 2.0, we would pass the audio bytes or URI
-        # litellm supports gemini/gemini-2.0-flash
-        prompt = """
-        Analyze this audio file (implied by the URL/context) and provide:
-        1. Mood (e.g., energetic, melancholic, ethereal, aggressive)
-        2. Genre (e.g., synthwave, industrial, lo-fi, orchestral)
-        3. Key (e.g., C Major, G# Minor)
-        4. Summary (one sentence describing the atmosphere)
-        
-        Return ONLY a JSON object with these keys: mood, genre, key, summary.
+    async def _load_audio_bytes(self, url: str) -> bytes:
+        """Download raw audio bytes for multimodal Gemini call."""
+        if url.startswith("/media/"):
+            relative_path = url.replace("/media/", "")
+            full_path = self.settings.filesystem_storage_root / relative_path
+            return full_path.read_bytes()
+        else:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                return response.content
+
+    async def _get_gemini_intel(self, audio_url: str, y: np.ndarray, sr: int) -> dict:
         """
-        
+        Call Gemini 2.0 Flash with the audio file as multimodal content (base64-encoded).
+        Falls back to deterministic librosa-based analysis on any failure.
+        """
+        self.logger.info(f"Calling Gemini 2.0 Flash (multimodal) for audio intelligence: {audio_url}")
+
+        prompt = (
+            "Analyze this audio file and return ONLY a JSON object with these keys: "
+            "mood (e.g. energetic, melancholic, ethereal, aggressive), "
+            "genre (e.g. synthwave, industrial, lo-fi, orchestral), "
+            "key (e.g. C Major, G# Minor), "
+            "summary (one sentence describing the atmosphere)."
+        )
+
         try:
-            # Note: Gemini 2.0 supports direct audio input. 
-            # For now, we use a text-based prompt as a placeholder for the multimodal call structure
-            # unless litellm specific multimodal syntax is confirmed.
+            audio_bytes = await self._load_audio_bytes(audio_url)
+            # Detect format from URL extension; default to mp3
+            ext = audio_url.rsplit(".", 1)[-1].lower() if "." in audio_url else "mp3"
+            mime_map = {"mp3": "audio/mpeg", "wav": "audio/wav", "flac": "audio/flac"}
+            mime_type = mime_map.get(ext, "audio/mpeg")
+
+            b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
+
             response = completion(
                 model="gemini/gemini-2.0-flash",
                 messages=[
-                    {"role": "user", "content": [
-                        {"type": "text", "text": prompt},
-                        # {"type": "input_audio", "input_audio": {"data": base64_audio, "format": "wav"}} 
-                        # Multimodal support depends on litellm version
-                    ]}
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{mime_type};base64,{b64_audio}"
+                                },
+                            },
+                        ],
+                    }
                 ],
                 api_key=self.settings.google_api_key,
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
             )
-            import json
             content = response.choices[0].message.content
-            return json.loads(content)
+            result = json.loads(content)
+            # Ensure all expected keys are present
+            for key in ("mood", "genre", "key", "summary"):
+                if key not in result or not result[key]:
+                    raise ValueError(f"Gemini response missing key: {key}")
+            return result
+
         except Exception as exc:
-            self.logger.warning(f"Gemini analysis failed: {exc}. Using fallback intel.")
-            return {
-                "mood": "cinematic",
-                "genre": "ambient",
-                "key": "C Minor",
-                "summary": "Analytic fallback due to model error."
-            }
+            self.logger.warning(
+                f"Gemini multimodal analysis failed: {exc}. Using librosa-based fallback."
+            )
+            return self._librosa_fallback_intel(y, sr)
+
+    def _librosa_fallback_intel(self, y: np.ndarray, sr: int) -> dict:
+        """
+        Deterministic fallback that derives mood, genre, and key from librosa features.
+
+        - mood:  derived from mean RMS energy
+        - genre: derived from mean spectral centroid
+        - key:   derived from dominant chroma bin
+        """
+        # --- Mood from RMS energy ---
+        rms_mean = float(np.mean(librosa.feature.rms(y=y)))
+        if rms_mean > 0.1:
+            mood = "energetic"
+        elif rms_mean > 0.05:
+            mood = "dramatic"
+        elif rms_mean > 0.02:
+            mood = "melancholic"
+        else:
+            mood = "ambient"
+
+        # --- Genre from spectral centroid ---
+        centroid_mean = float(np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)))
+        if centroid_mean > 4000:
+            genre = "electronic"
+        elif centroid_mean > 2500:
+            genre = "synthwave"
+        elif centroid_mean > 1500:
+            genre = "cinematic"
+        else:
+            genre = "ambient"
+
+        # --- Key from dominant chroma bin ---
+        chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+        chroma_mean = np.mean(chroma, axis=1)
+        dominant_bin = int(np.argmax(chroma_mean))
+        note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        note = note_names[dominant_bin % 12]
+        # Use minor if energy is low, major otherwise
+        mode = "Minor" if rms_mean < 0.05 else "Major"
+        key = f"{note} {mode}"
+
+        return {
+            "mood": mood,
+            "genre": genre,
+            "key": key,
+            "summary": f"Deterministic fallback: {mood} {genre} track in {key}.",
+        }
 
 
 class StoryboardProvider:

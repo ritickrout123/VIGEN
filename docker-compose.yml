@@ -23,6 +23,8 @@ services:
       dockerfile: infra/backend.Dockerfile
     env_file:
       - .env
+    environment:
+      - DEMO_MODE=true
     ports:
       - "8000:8000"
     depends_on:
@@ -31,6 +33,7 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./storage:/app/storage
+      - ./backend/fixtures:/app/fixtures
 
   worker:
     build:
@@ -38,12 +41,15 @@ services:
       dockerfile: infra/worker.Dockerfile
     env_file:
       - .env
+    environment:
+      - DEMO_MODE=true
     depends_on:
       - postgres
       - redis
     volumes:
       - ./backend:/app/backend
       - ./storage:/app/storage
+      - ./backend/fixtures:/app/fixtures
 
   frontend:
     build:
