@@ -18,6 +18,6 @@ def analyse_and_plan(job_id: str) -> None:
 
 
 @celery_app.task(name="jobs.render")
-def render(job_id: str) -> None:
-    asyncio.run(_with_session(lambda session: JobService().render_job(session, job_id)))
+def render(job_id: str, scene_indexes: list[int] | None = None) -> None:
+    asyncio.run(_with_session(lambda session: JobService().render_job(session, job_id, scene_indexes)))
 

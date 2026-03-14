@@ -14,7 +14,12 @@ from app.schemas.job import CreateJobRequest, RejectStoryboardRequest
 from app.schemas.pipeline import ProgressEvent
 from app.services.notifications import NotificationService
 from app.services.progress import progress_broker
-from app.services.providers import AudioAnalysisProvider, StoryboardProvider, VideoRenderProvider
+from app.services.providers import (
+    AudioAnalysisProvider,
+    StoryboardProvider,
+    VideoRenderProvider,
+    VideoAssemblyProvider,
+)
 from app.services.storage import StorageService
 
 
@@ -25,6 +30,7 @@ class JobService:
         self.analysis_provider = AudioAnalysisProvider()
         self.storyboard_provider = StoryboardProvider()
         self.render_provider = VideoRenderProvider(self.storage)
+        self.assembly_provider = VideoAssemblyProvider(self.storage)
         self.notifications = NotificationService()
 
     async def create_job(
@@ -47,7 +53,10 @@ class JobService:
         session.add(job)
         await session.commit()
         await session.refresh(job)
-        return await self.run_analysis_and_planning(session, job.id)
+
+        from app.workers.celery_app import celery_app
+        celery_app.send_task("jobs.analyse_and_plan", args=[job.id])
+        return job
 
     async def list_jobs(self, session: AsyncSession, user: User) -> list[Job]:
         result = await session.scalars(
@@ -82,6 +91,9 @@ class JobService:
 
         analysis = await self.analysis_provider.analyze(job.audio_url, job.audio_duration_seconds)
         job.audio_analysis = analysis
+        # Update job metadata from intelligence
+        job.mood = analysis.get("mood")
+        job.genre = analysis.get("genre")
 
         beat_map = await session.scalar(select(AudioBeatMap).where(AudioBeatMap.job_id == job.id))
         if not beat_map:
@@ -89,11 +101,15 @@ class JobService:
                 job_id=job.id,
                 bpm=analysis["bpm"],
                 beat_times=analysis["beats"],
-                bar_times=analysis["beats"][::4],
-                downbeat_times=analysis["beats"][::4],
-                onset_times=analysis["beats"][::2],
+                bar_times=analysis["beats"][::4] if len(analysis["beats"]) >= 4 else analysis["beats"],
+                downbeat_times=analysis["beats"][::4] if len(analysis["beats"]) >= 4 else analysis["beats"],
+                onset_times=analysis.get("onsets", []),
             )
             session.add(beat_map)
+        else:
+            beat_map.bpm = analysis["bpm"]
+            beat_map.beat_times = analysis["beats"]
+            beat_map.onset_times = analysis.get("onsets", [])
 
         job.status = "planning"
         job.current_stage = "planning"
@@ -145,8 +161,10 @@ class JobService:
         job.status = "rendering"
         job.current_stage = "rendering"
         await session.commit()
-        await self.render_job(session, job.id)
-        return await self.get_job(session, user, job_id)
+
+        from app.workers.celery_app import celery_app
+        celery_app.send_task("jobs.render", args=[job.id])
+        return job
 
     async def reject_storyboard(
         self,
@@ -161,7 +179,10 @@ class JobService:
         job.storyboard_rejection_reason = payload.reason
         job.storyboard_regeneration_count += 1
         await session.commit()
-        return await self.run_analysis_and_planning(session, job.id)
+
+        from app.workers.celery_app import celery_app
+        celery_app.send_task("jobs.analyse_and_plan", args=[job.id])
+        return job
 
     async def retry_scene(
         self,
@@ -184,8 +205,10 @@ class JobService:
         job.status = "rendering"
         job.current_stage = "rendering"
         await session.commit()
-        await self.render_job(session, job.id, [scene_index])
-        return await self.get_job(session, user, job_id)
+
+        from app.workers.celery_app import celery_app
+        celery_app.send_task("jobs.render", args=[job.id, [scene_index]])
+        return job
 
     async def render_job(
         self,
@@ -224,7 +247,7 @@ class JobService:
             )
 
             if job.scenes_completed >= self.settings.preview_scene_threshold and not job.preview_video_url:
-                job.preview_video_url = self.storage.write_bytes(
+                job.preview_video_url = await self.storage.write_bytes(
                     f"renders/{job.id}/preview.mp4",
                     b"VIGEN preview placeholder",
                 )
@@ -242,10 +265,12 @@ class JobService:
                     message="Assembling final video",
                 )
             )
-            job.final_video_url = self.storage.write_bytes(
-                f"renders/{job.id}/final.mp4",
-                b"VIGEN final video placeholder",
+            # 5. Assemble final video
+            scene_urls = [s.video_url for s in ordered_scenes if s.video_url]
+            job.final_video_url = await self.assembly_provider.assemble(
+                job.id, scene_urls, job.audio_url
             )
+            
             job.final_video_duration_seconds = job.audio_duration_seconds
             job.status = "complete"
             job.current_stage = "done"

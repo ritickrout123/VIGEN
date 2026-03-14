@@ -18,6 +18,7 @@ class TokenPayload(BaseModel):
     role: str
     type: str
     exp: int
+    jti: str | None = None
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -44,10 +45,10 @@ def create_access_token(user_id: str, email: str, role: str) -> str:
     )
 
 
-def create_refresh_token(user_id: str, email: str, role: str) -> str:
+def create_refresh_token(user_id: str, email: str, role: str, jti: str) -> str:
     settings = get_settings()
     return _encode_token(
-        {"sub": user_id, "email": email, "role": role, "type": "refresh"},
+        {"sub": user_id, "email": email, "role": role, "type": "refresh", "jti": jti},
         timedelta(days=settings.refresh_token_expire_days),
     )
 

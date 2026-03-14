@@ -1,20 +1,19 @@
 import Link from "next/link";
 import React from "react";
-import { ActionLink, Card } from "../components/ui.jsxx";
 
-const PIPELINE_NODES = [
+const FLOW = [
   { icon: "🎵", label: "Upload" },
   { icon: "🔍", label: "Analysis" },
   { icon: "📋", label: "Storyboard" },
-  { icon: "✅", label: "Approval" },
+  { icon: "✅", label: "Approve" },
   { icon: "🎬", label: "Render" },
   { icon: "🎉", label: "Deliver" },
 ];
 
-const TRUST_CHIPS = [
-  { icon: "🔒", text: "Approval gate before GPU spend" },
-  { icon: "⚡", text: "Real-time progress via WebSocket" },
-  { icon: "🎭", text: "Preview at ~30% scenes complete" },
+const TRUST = [
+  { icon: "🔒", text: "Approve before GPU spend" },
+  { icon: "⚡", text: "Real-time WebSocket progress" },
+  { icon: "🎭", text: "Preview at 30% complete" },
   { icon: "↺", text: "Per-scene regeneration" },
 ];
 
@@ -29,89 +28,86 @@ const PRESETS = [
 
 export default function HomePage() {
   return (
-    <div className="shell">
-      <main className="page-grid">
-
-        {/* ── Hero ─────────────────────────────────────────────────── */}
-        <div className="hero-section">
-          <div className="hero-grid">
-            <div>
-              <div className="kicker">Phase 1 MVP · March 2026</div>
-              <h1 className="headline" style={{ marginTop: "12px", marginBottom: "20px" }}>
-                Turn a track into a cinematic video.
-              </h1>
-              <p className="lede" style={{ marginBottom: "28px" }}>
-                Upload any audio. VIGEN analyses the beat map, generates a scene-by-scene storyboard you approve, then renders each clip in parallel and assembles the final MP4 — all without a production team.
-              </p>
-              <div className="actions">
-                <ActionLink href="/create">🎬 Create a job</ActionLink>
-                <ActionLink href="/dashboard" secondary>Open dashboard</ActionLink>
-              </div>
-              <div className="trust-row" style={{ marginTop: "28px" }}>
-                {TRUST_CHIPS.map((chip) => (
-                  <span key={chip.text} className="trust-chip">
-                    <span>{chip.icon}</span>
-                    {chip.text}
-                  </span>
-                ))}
-              </div>
+    <div className="vg-shell">
+      {/* ── Hero ─────────────────────────────────────────────────── */}
+      <section className="vg-hero">
+        <div className="vg-hero-grid">
+          <div>
+            <p className="vg-eyebrow">AI Music Video Generator</p>
+            <h1 className="vg-headline">
+              Turn a track into a cinematic video.
+            </h1>
+            <p className="vg-lede" style={{ marginTop: "20px", maxWidth: "520px" }}>
+              Upload any audio. VIGEN analyses the beat map, generates a scene-by-scene storyboard you approve, then renders each clip in parallel and assembles the final MP4.
+            </p>
+            <div className="vg-actions" style={{ marginTop: "32px" }}>
+              <Link href="/create" className="vg-btn vg-btn-lg">🎬 Create a video</Link>
+              <Link href="/login" className="vg-btn-secondary vg-btn-lg">Log in</Link>
             </div>
+            <div className="vg-trust-row">
+              {TRUST.map((t) => (
+                <span key={t.text} className="vg-trust-chip">
+                  <span>{t.icon}</span>{t.text}
+                </span>
+              ))}
+            </div>
+          </div>
 
-            {/* Pipeline diagram */}
-            <Card>
-              <div className="kicker">How it works</div>
-              <div className="pipeline-diagram" style={{ marginTop: "16px" }}>
-                {PIPELINE_NODES.map((node, i) => (
-                  <React.Fragment key={node.label}>
-                    <div className="pipeline-node">
-                      <div className="pipeline-node-icon">{node.icon}</div>
-                      <div className="pipeline-node-label">{node.label}</div>
-                    </div>
-                    {i < PIPELINE_NODES.length - 1 && (
-                      <span className="pipeline-arrow">→</span>
-                    )}
-                  </React.Fragment>
-                ))}
-              </div>
-              <p className="small muted" style={{ marginTop: "16px" }}>
-                Storyboard approval gates GPU spend. Rendering is fully asynchronous — you'll get a preview after the first batch of scenes, then a download link on completion.
-              </p>
-            </Card>
+          {/* Pipeline card */}
+          <div className="vg-card">
+            <p className="vg-eyebrow">How it works</p>
+            <div className="vg-flow" style={{ marginTop: "16px" }}>
+              {FLOW.map((node, i) => (
+                <React.Fragment key={node.label}>
+                  <div className="vg-flow-node">
+                    <div className="vg-flow-icon">{node.icon}</div>
+                    <span className="vg-flow-label">{node.label}</span>
+                  </div>
+                  {i < FLOW.length - 1 && <span className="vg-flow-arrow">→</span>}
+                </React.Fragment>
+              ))}
+            </div>
+            <p className="vg-small vg-secondary" style={{ marginTop: "16px", lineHeight: 1.6 }}>
+              Storyboard approval gates GPU spend. Rendering is fully async — you get a preview after the first batch of scenes, then a download link on completion.
+            </p>
           </div>
         </div>
+      </section>
 
-        {/* ── Style Preset Gallery ─────────────────────────────────── */}
-        <Card>
-          <div className="kicker">Style presets</div>
-          <h2 style={{ marginBottom: "6px" }}>Six launch styles</h2>
-          <p className="lede" style={{ marginBottom: "20px" }}>
-            Choose a preset when you create a job. Each injects a curated prompt modifier, color palette, and motion bias into scene generation.
-          </p>
-          <div className="preset-grid">
-            {PRESETS.map((preset) => (
-              <div key={preset.name} className="preset-card">
-                <div className="preset-palette">
-                  {preset.colors.map((hex) => (
-                    <div key={hex} className="preset-palette-swatch" style={{ background: hex }} />
-                  ))}
-                </div>
-                <strong style={{ fontSize: "0.9rem" }}>{preset.name}</strong>
-                <p className="small muted" style={{ margin: 0 }}>{preset.tags}</p>
+      {/* ── Style Presets ─────────────────────────────────────────── */}
+      <section className="vg-card" style={{ marginBottom: "24px" }}>
+        <p className="vg-eyebrow">Style presets</p>
+        <h2 style={{ marginBottom: "6px" }}>Six launch styles</h2>
+        <p className="vg-lede" style={{ marginBottom: "24px", maxWidth: "560px" }}>
+          Each preset injects a curated prompt modifier, color palette, and motion bias into scene generation.
+        </p>
+        <div className="vg-preset-grid">
+          {PRESETS.map((p) => (
+            <div key={p.name} className="vg-card-sm" style={{ gap: "10px", display: "grid" }}>
+              <div style={{ display: "flex", height: "6px", borderRadius: "4px", overflow: "hidden", gap: "2px" }}>
+                {p.colors.map((hex) => (
+                  <div key={hex} style={{ flex: 1, background: hex }} />
+                ))}
               </div>
-            ))}
-          </div>
-        </Card>
+              <strong className="vg-small" style={{ color: "var(--ink)" }}>{p.name}</strong>
+              <p className="vg-small vg-secondary">{p.tags}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
-        {/* ── CTA ──────────────────────────────────────────────────── */}
-        <Card style={{ textAlign: "center", padding: "40px" }}>
-          <div className="kicker">Ready?</div>
-          <h2 style={{ marginBottom: "12px" }}>Start your first render</h2>
-          <div className="actions" style={{ justifyContent: "center" }}>
-            <ActionLink href="/create">🎬 Create a job</ActionLink>
-            <ActionLink href="/login" secondary>Log in</ActionLink>
-          </div>
-        </Card>
-      </main>
+      {/* ── CTA ──────────────────────────────────────────────────── */}
+      <section className="vg-card" style={{ textAlign: "center", padding: "56px 32px", marginBottom: "48px" }}>
+        <p className="vg-eyebrow">Ready?</p>
+        <h2 style={{ marginBottom: "8px" }}>Start your first render</h2>
+        <p className="vg-secondary" style={{ marginBottom: "28px" }}>
+          No production team. No timeline. Just upload and approve.
+        </p>
+        <div className="vg-actions" style={{ justifyContent: "center" }}>
+          <Link href="/register" className="vg-btn vg-btn-lg">Create free account</Link>
+          <Link href="/login" className="vg-btn-secondary vg-btn-lg">Log in</Link>
+        </div>
+      </section>
     </div>
   );
 }

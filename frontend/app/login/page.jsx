@@ -1,12 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import React, { useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-
 import { login, USE_MOCKS } from "../../lib/api.js";
 import { setStoredSession } from "../../lib/auth.js";
-import { Card, Shell } from "../../components/ui.jsxx";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,8 +12,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(event) {
-    event.preventDefault();
+  async function handleSubmit(e) {
+    e.preventDefault();
     setLoading(true);
     setError("");
     try {
@@ -23,77 +21,83 @@ export default function LoginPage() {
       setStoredSession(session);
       router.push("/dashboard");
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Login failed. Check your credentials.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleMockLogin() {
-    const session = {
+  function handleMockLogin() {
+    setStoredSession({
       access_token: "mock-access-token",
       refresh_token: "mock-refresh-token",
-      user: { id: "demo-user", email: "demo@vigen.app", username: "demo", role: "user", credits_balance: 250 }
-    };
-    setStoredSession(session);
+      user: { id: "demo-user", email: "demo@vigen.app", username: "demo", role: "user", credits_balance: 250 },
+    });
     router.push("/dashboard");
   }
 
   return (
-    <Shell>
-      <main className="page-grid" style={{ maxWidth: "480px", margin: "0 auto", paddingTop: "60px" }}>
-        <Card>
-          <div className="kicker">Welcome back</div>
+    <div className="vg-shell">
+      <main className="vg-page" style={{ maxWidth: "440px", margin: "0 auto" }}>
+        <div className="vg-card">
+          <p className="vg-eyebrow">Welcome back</p>
           <h1 style={{ marginBottom: "6px" }}>Log in to VIGEN</h1>
-          <p className="lede" style={{ marginBottom: "24px" }}>Pick up where you left off.</p>
-          <form className="form-grid" onSubmit={handleSubmit}>
-            <label className="field">
-              <span className="label">Email</span>
+          <p className="vg-secondary" style={{ marginBottom: "28px" }}>Pick up where you left off.</p>
+
+          <form className="vg-form" onSubmit={handleSubmit}>
+            <div className="vg-field">
+              <label className="vg-label" htmlFor="email">Email</label>
               <input
+                id="email"
                 type="email"
                 autoComplete="email"
                 required
+                placeholder="you@example.com"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
-            </label>
-            <label className="field">
-              <span className="label">Password</span>
+            </div>
+            <div className="vg-field">
+              <label className="vg-label" htmlFor="password">Password</label>
               <input
+                id="password"
                 type="password"
                 autoComplete="current-password"
                 required
+                placeholder="••••••••"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
               />
-            </label>
-            {error && <p className="error-text">{error}</p>}
-            <button className="btn" type="submit" disabled={loading}>
+            </div>
+            {error && <p className="vg-error">⚠ {error}</p>}
+            <button className="vg-btn" type="submit" disabled={loading} style={{ width: "100%" }}>
               {loading ? "Logging in…" : "Log in"}
             </button>
           </form>
+
           {USE_MOCKS && (
-            <div style={{ marginTop: "16px" }}>
-              <div className="divider" />
+            <>
+              <div className="vg-divider" style={{ margin: "20px 0" }} />
               <button
-                className="btn-secondary"
+                className="vg-btn-secondary"
                 type="button"
-                style={{ width: "100%", marginTop: "12px" }}
+                style={{ width: "100%" }}
                 onClick={handleMockLogin}
               >
                 ⚡ Mock login — skip to dashboard
               </button>
-              <p className="small muted" style={{ textAlign: "center", marginTop: "8px" }}>
-                Mock mode active — no real API call
+              <p className="vg-small vg-secondary" style={{ textAlign: "center", marginTop: "8px" }}>
+                Mock mode active
               </p>
-            </div>
+            </>
           )}
-          <p className="small muted" style={{ textAlign: "center", marginTop: "20px" }}>
+
+          <p className="vg-small vg-secondary" style={{ textAlign: "center", marginTop: "24px" }}>
             No account?{" "}
-            <Link href="/register" style={{ color: "var(--accent)" }}>Register</Link>
+            <Link href="/register" style={{ color: "var(--purple)" }}>Create one free</Link>
           </p>
-        </Card>
+        </div>
       </main>
-    </Shell>
+    </div>
   );
 }

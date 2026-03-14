@@ -47,7 +47,10 @@ async def refresh(
     user = await session.scalar(select(User).where(User.id == token.sub))
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    return AuthService.refresh(user)
+    try:
+        return await AuthService.refresh(session, user, token.jti)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
 
 
 @router.get("/me", response_model=UserResponse)

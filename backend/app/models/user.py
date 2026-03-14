@@ -29,6 +29,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    refresh_token_jti: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     jobs = relationship("Job", back_populates="user", cascade="all, delete-orphan")
     credit_transactions = relationship(

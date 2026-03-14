@@ -1,10 +1,9 @@
 import "./globals.css";
-import React from "react";
-import { ClientShell } from "../components/client-shell.jsxx";
+import { ClientShell } from "../components/client-shell";
 
 export const metadata = {
   title: "VIGEN — AI Music Video Generator",
-  description: "Upload a track. Get a cinematic, beat-synchronized music video in minutes."
+  description: "Upload a track. Get a cinematic, beat-synchronized music video in minutes.",
 };
 
 export default function RootLayout({ children }) {

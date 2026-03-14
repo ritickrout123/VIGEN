@@ -3,25 +3,25 @@ import React from "react";
 
 /* ─── Shell ──────────────────────────────────────────────────────── */
 export function Shell({ children }) {
-  return <div className="shell">{children}</div>;
+  return <div className="vg-shell">{children}</div>;
 }
 
 /* ─── Topbar ─────────────────────────────────────────────────────── */
 export function Topbar({ session, onLogout }) {
   return (
-    <header className="topbar shell">
-      <Link href="/" className="brand">▶ VIGEN</Link>
-      <nav className="nav-links">
+    <header className="vg-topbar vg-shell">
+      <Link href="/" className="vg-brand">▶ VIGEN</Link>
+      <nav className="vg-nav">
         {session ? (
           <>
             <Link href="/dashboard">Dashboard</Link>
             <Link href="/create">Create</Link>
-            <button key="logout" onClick={onLogout}>Logout</button>
+            <button onClick={onLogout}>Logout</button>
           </>
         ) : (
           <>
             <Link href="/login">Log in</Link>
-            <Link href="/register">Register</Link>
+            <Link href="/register" className="vg-nav-cta">Get started</Link>
           </>
         )}
       </nav>
@@ -32,45 +32,44 @@ export function Topbar({ session, onLogout }) {
 /* ─── Card ───────────────────────────────────────────────────────── */
 export function Card({ children, className = "", style = {} }) {
   return (
-    <section className={`card ${className}`.trim()} style={style}>
+    <section className={`vg-card ${className}`.trim()} style={style}>
       {children}
     </section>
   );
 }
 
-export function CardSm({ children, className = "" }) {
-  return <div className={`card-sm ${className}`.trim()}>{children}</div>;
-}
-
 /* ─── Status Badge ───────────────────────────────────────────────── */
 const STATUS_LABELS = {
-  pending: "Pending",
-  queued: "Queued",
-  analysing: "Analysing",
-  planning: "Planning",
+  pending:           "Pending",
+  queued:            "Queued",
+  analysing:         "Analysing",
+  planning:          "Planning",
   awaiting_approval: "Needs Review",
-  rendering: "Rendering",
-  assembling: "Assembling",
-  complete: "Complete",
-  failed: "Failed",
-  cancelled: "Cancelled",
+  rendering:         "Rendering",
+  assembling:        "Assembling",
+  complete:          "Complete",
+  failed:            "Failed",
+  cancelled:         "Cancelled",
 };
 
 export function StatusBadge({ value }) {
   const label = STATUS_LABELS[value] || value || "Unknown";
   return (
-    <span className={`status-badge status-${value || "pending"}`}>
+    <span className={`vg-badge vg-badge-${value || "pending"}`}>
       {label}
     </span>
   );
 }
 
 /* ─── Progress Bar ───────────────────────────────────────────────── */
-export function ProgressBar({ value }) {
+export function ProgressBar({ value, animated = false }) {
   const pct = Math.max(0, Math.min(100, value || 0));
   return (
-    <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin="0" aria-valuemax="100">
-      <span style={{ width: `${pct}%` }} />
+    <div className="vg-progress" role="progressbar" aria-valuenow={pct} aria-valuemin="0" aria-valuemax="100">
+      <div
+        className={`vg-progress-fill${animated ? " is-animated" : ""}`}
+        style={{ width: `${pct}%` }}
+      />
     </div>
   );
 }
@@ -84,7 +83,6 @@ const STAGES = [
   { key: "assembly",  label: "Assembly",  icon: "⚙️" },
   { key: "done",      label: "Done",      icon: "🎉" },
 ];
-
 const STAGE_ORDER = STAGES.map((s) => s.key);
 
 export function PipelineTracker({ currentStage, status }) {
@@ -92,24 +90,21 @@ export function PipelineTracker({ currentStage, status }) {
   const currentIndex = STAGE_ORDER.indexOf(effectiveStage);
 
   return (
-    <div className="pipeline-tracker">
+    <div className="vg-pipeline">
       {STAGES.map((step, i) => {
         const isDone = i < currentIndex || status === "complete";
         const isActive = i === currentIndex && status !== "complete";
-        const cls = `pipeline-step ${isDone ? "done" : ""} ${isActive ? "active" : ""}`.trim();
-
+        const cls = `vg-pipeline-step${isDone ? " is-done" : ""}${isActive ? " is-active" : ""}`;
         return (
           <React.Fragment key={step.key}>
             <div className={cls}>
-              <div className="pipeline-step-inner">
-                <div className="pipeline-step-dot">
-                  {isDone ? "✓" : step.icon}
-                </div>
-                <span className="pipeline-step-label">{step.label}</span>
+              <div className="vg-pipeline-dot">
+                {isDone ? "✓" : step.icon}
               </div>
+              <span className="vg-pipeline-label">{step.label}</span>
             </div>
             {i < STAGES.length - 1 && (
-              <div className={`pipeline-connector ${isDone ? "done" : ""}`} />
+              <div className={`vg-pipeline-connector${isDone ? " is-done" : ""}`} />
             )}
           </React.Fragment>
         );
@@ -119,58 +114,97 @@ export function PipelineTracker({ currentStage, status }) {
 }
 
 /* ─── Stat Row ───────────────────────────────────────────────────── */
-export function StatRow({ label, value }) {
+export function StatRow({ label, value, mono = false }) {
   return (
-    <div className="stat-row">
-      <span className="stat-label">{label}</span>
-      <span className="stat-value">{value ?? "—"}</span>
+    <div className="vg-stat-row">
+      <span className="vg-small vg-secondary">{label}</span>
+      <span className={`vg-small${mono ? " vg-mono" : ""}`} style={{ color: "var(--ink)", fontWeight: 500 }}>
+        {value ?? "—"}
+      </span>
     </div>
   );
 }
 
-/* ─── Color Palette Swatches ─────────────────────────────────────── */
-export function ColorPalette({ colors = [] }) {
+/* ─── Color Swatches ─────────────────────────────────────────────── */
+export function ColorSwatches({ colors = [] }) {
+  if (!colors.length) return null;
   return (
-    <div className="color-palette">
-      {colors.map((hex) => (
-        <span
-          key={hex}
-          className="color-swatch"
-          style={{ background: hex }}
-          title={hex}
-        />
+    <div className="vg-swatches">
+      {colors.map((hex, i) => (
+        <span key={`${hex}-${i}`} className="vg-swatch" style={{ background: hex }} title={hex} />
       ))}
     </div>
   );
 }
 
-/* ─── Badge ──────────────────────────────────────────────────────── */
-export function Badge({ children }) {
-  return <span className="badge">{children}</span>;
+/* ─── Tag ────────────────────────────────────────────────────────── */
+export function Tag({ children }) {
+  return <span className="vg-tag">{children}</span>;
 }
 
 /* ─── Scene Card ─────────────────────────────────────────────────── */
 export function SceneCard({ scene, onRetry, showRetry = false }) {
+  const statusCls = scene.status === "failed" ? " is-failed" : scene.status === "complete" ? " is-complete" : "";
+  const timecode = (s) => {
+    if (s == null) return "—";
+    const m = Math.floor(s / 60);
+    const sec = Math.round(s % 60);
+    return `${m}:${String(sec).padStart(2, "0")}`;
+  };
+
   return (
-    <article className="scene-card">
+    <article className={`vg-scene-card${statusCls}`}>
+      {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
-        <span className="scene-number">{scene.scene_index + 1}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span className="vg-scene-num">{scene.scene_index + 1}</span>
+          <span className="vg-small vg-mono vg-secondary">
+            {timecode(scene.start_time_seconds)} – {timecode(scene.end_time_seconds)}
+          </span>
+        </div>
         <StatusBadge value={scene.status} />
       </div>
-      <p className="small muted" style={{ margin: 0 }}>
-        {scene.start_time_seconds}s – {scene.end_time_seconds}s
+
+      {/* Visual prompt */}
+      <p className="vg-small" style={{ color: "var(--ink)", lineHeight: 1.55 }}>
+        {scene.visual_prompt || scene.visual_description || "—"}
       </p>
-      <p className="small" style={{ margin: "4px 0", lineHeight: 1.5 }}>
-        {scene.visual_prompt || scene.visual_description}
-      </p>
-      <div className="badge-row">
-        {scene.mood && <Badge>🎭 {scene.mood}</Badge>}
-        {scene.camera_angle && <Badge>📷 {scene.camera_angle.replace(/_/g, " ")}</Badge>}
-        {scene.motion_type && <Badge>↔ {scene.motion_type}</Badge>}
+
+      {/* Metadata tags */}
+      <div className="vg-tag-row">
+        {scene.mood && <Tag>🎭 {scene.mood}</Tag>}
+        {scene.camera_angle && <Tag>📷 {scene.camera_angle.replace(/_/g, " ")}</Tag>}
+        {scene.motion_type && <Tag>↔ {scene.motion_type}</Tag>}
+        {scene.lighting_style && <Tag>💡 {scene.lighting_style}</Tag>}
+        {scene.beat_importance_score != null && (
+          <Tag>♩ {Math.round(scene.beat_importance_score * 100)}%</Tag>
+        )}
+        {scene.duration_seconds != null && (
+          <Tag className="vg-mono">{scene.duration_seconds.toFixed(1)}s</Tag>
+        )}
       </div>
-      <ColorPalette colors={scene.color_palette || []} />
-      {showRetry && onRetry && (
-        <button className="btn-ghost" type="button" onClick={() => onRetry(scene.scene_index)}>
+
+      {/* Color palette */}
+      <ColorSwatches colors={scene.color_palette || []} />
+
+      {/* Cost / render info (if complete) */}
+      {scene.status === "complete" && (
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+          {scene.cost_usd != null && (
+            <span className="vg-small vg-mono vg-secondary">${Number(scene.cost_usd).toFixed(2)}</span>
+          )}
+          {scene.video_model_used && (
+            <span className="vg-small vg-secondary">{scene.video_model_used}</span>
+          )}
+          {scene.render_time_seconds != null && (
+            <span className="vg-small vg-secondary">{scene.render_time_seconds.toFixed(1)}s render</span>
+          )}
+        </div>
+      )}
+
+      {/* Retry */}
+      {showRetry && onRetry && scene.status === "failed" && (
+        <button className="vg-btn-ghost" type="button" onClick={() => onRetry(scene.scene_index)}>
           ↺ Retry scene
         </button>
       )}
@@ -182,22 +216,22 @@ export function SceneCard({ scene, onRetry, showRetry = false }) {
 export function PresetCard({ preset, selected, onSelect }) {
   return (
     <div
-      className={`preset-card ${selected ? "selected" : ""}`}
+      className={`vg-preset-card${selected ? " is-selected" : ""}`}
       role="button"
       tabIndex={0}
       onClick={() => onSelect(preset.id)}
       onKeyDown={(e) => e.key === "Enter" && onSelect(preset.id)}
     >
-      <div className="preset-palette">
-        {(preset.color_palette || []).map((hex) => (
-          <div key={hex} className="preset-palette-swatch" style={{ background: hex }} />
+      <div className="vg-preset-palette">
+        {(preset.color_palette || []).map((hex, i) => (
+          <div key={`${hex}-${i}`} className="vg-preset-swatch" style={{ background: hex }} />
         ))}
       </div>
-      <strong style={{ fontSize: "0.92rem" }}>{preset.name}</strong>
-      <p className="small muted" style={{ margin: 0, lineHeight: 1.4 }}>{preset.description}</p>
-      <div className="badge-row">
-        {preset.motion_bias && <Badge>↔ {preset.motion_bias}</Badge>}
-        {preset.lighting_bias && <Badge>💡 {preset.lighting_bias}</Badge>}
+      <strong style={{ fontSize: "0.9rem", color: "var(--ink)" }}>{preset.name}</strong>
+      <p className="vg-small vg-secondary" style={{ lineHeight: 1.4 }}>{preset.description}</p>
+      <div className="vg-tag-row">
+        {preset.motion_bias && <Tag>↔ {preset.motion_bias}</Tag>}
+        {preset.lighting_bias && <Tag>💡 {preset.lighting_bias}</Tag>}
       </div>
     </div>
   );
@@ -205,17 +239,18 @@ export function PresetCard({ preset, selected, onSelect }) {
 
 /* ─── Drag Uploader ──────────────────────────────────────────────── */
 export function DragUploader({ onFile, file, uploading }) {
+  const [isOver, setIsOver] = React.useState(false);
+
   function handleDrop(e) {
     e.preventDefault();
+    setIsOver(false);
     const dropped = e.dataTransfer?.files?.[0];
     if (dropped) validate(dropped);
   }
-
   function handleChange(e) {
     const picked = e.target.files?.[0];
     if (picked) validate(picked);
   }
-
   function validate(f) {
     const ok = ["audio/mpeg", "audio/wav", "audio/flac", "audio/x-flac"].includes(f.type)
       || /\.(mp3|wav|flac)$/i.test(f.name);
@@ -224,48 +259,59 @@ export function DragUploader({ onFile, file, uploading }) {
     onFile(f);
   }
 
-  function handleDragOver(e) { e.preventDefault(); }
-
-  const label = file
-    ? `${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`
-    : "Drop your MP3, WAV, or FLAC here";
+  const cls = `vg-dropzone${isOver ? " is-over" : ""}${file ? " has-file" : ""}`;
 
   return (
     <label
-      className="dropzone"
+      className={cls}
       onDrop={handleDrop}
-      onDragOver={handleDragOver}
+      onDragOver={(e) => { e.preventDefault(); setIsOver(true); }}
+      onDragLeave={() => setIsOver(false)}
     >
-      <input type="file" accept=".mp3,.wav,.flac" onChange={handleChange} style={{ display: "none" }} />
-      <span className="dropzone-icon">{file ? "🎵" : "📁"}</span>
-      <strong>{uploading ? "Uploading…" : label}</strong>
-      {!file && <p className="small muted" style={{ marginTop: "6px" }}>MP3 · WAV · FLAC · Max 200 MB</p>}
+      <input type="file" accept=".mp3,.wav,.flac" onChange={handleChange} />
+      <div style={{ fontSize: "2.5rem", marginBottom: "12px" }}>{file ? "🎵" : "📁"}</div>
+      {uploading ? (
+        <p style={{ color: "var(--purple)", fontWeight: 600 }}>Uploading…</p>
+      ) : file ? (
+        <>
+          <p style={{ fontWeight: 600, color: "var(--teal)" }}>{file.name}</p>
+          <p className="vg-small vg-secondary" style={{ marginTop: "4px" }}>
+            {(file.size / 1024 / 1024).toFixed(1)} MB · Click to change
+          </p>
+        </>
+      ) : (
+        <>
+          <p style={{ fontWeight: 600 }}>Drop your audio file here</p>
+          <p className="vg-small vg-secondary" style={{ marginTop: "6px" }}>MP3 · WAV · FLAC · Max 200 MB</p>
+        </>
+      )}
     </label>
   );
 }
 
 /* ─── Video Player ───────────────────────────────────────────────── */
-export function VideoPlayer({ src, label = "Video", downloadHref }) {
+export function VideoPlayer({ src, downloadHref }) {
   if (!src) {
     return (
-      <div className="video-placeholder">
-        <span className="video-placeholder-icon">🎬</span>
-        <p className="small muted">Video will appear here once ready.</p>
+      <div className="vg-video-empty">
+        <span style={{ fontSize: "2.5rem" }}>🎬</span>
+        <p className="vg-small vg-secondary">Video will appear here once ready.</p>
       </div>
     );
   }
-
   return (
-    <div className="video-container">
-      <video src={src} controls preload="metadata" style={{ width: "100%", height: "100%" }} />
+    <div>
+      <div className="vg-video-wrap">
+        <video src={src} controls preload="metadata" />
+      </div>
       {downloadHref && (
-        <div style={{ marginTop: "12px", display: "flex", gap: "10px" }}>
-          <a href={downloadHref} className="btn-secondary" download>⬇ Download MP4</a>
+        <div className="vg-actions" style={{ marginTop: "12px" }}>
+          <a href={downloadHref} className="vg-btn" download>⬇ Download MP4</a>
           <button
-            className="btn-ghost"
-            onClick={() => { navigator.clipboard?.writeText(window.location.href); }}
+            className="vg-btn-secondary"
+            onClick={() => navigator.clipboard?.writeText(window.location.href)}
           >
-            🔗 Copy share link
+            🔗 Copy link
           </button>
         </div>
       )}
@@ -276,10 +322,10 @@ export function VideoPlayer({ src, label = "Video", downloadHref }) {
 /* ─── Empty State ────────────────────────────────────────────────── */
 export function EmptyState({ title, body, icon = "📭", action }) {
   return (
-    <div className="empty">
-      <span className="empty-icon">{icon}</span>
-      <strong style={{ display: "block", marginBottom: "8px" }}>{title}</strong>
-      <p className="small muted" style={{ marginBottom: action ? "20px" : 0 }}>{body}</p>
+    <div className="vg-empty">
+      <span className="vg-empty-icon">{icon}</span>
+      <strong style={{ color: "var(--ink)" }}>{title}</strong>
+      <p className="vg-small vg-secondary">{body}</p>
       {action}
     </div>
   );
@@ -287,6 +333,37 @@ export function EmptyState({ title, body, icon = "📭", action }) {
 
 /* ─── Action Link ────────────────────────────────────────────────── */
 export function ActionLink({ href, children, secondary = false, className = "" }) {
-  const cls = secondary ? "btn-secondary" : "btn";
+  const cls = secondary ? "vg-btn-secondary" : "vg-btn";
   return <Link href={href} className={`${cls} ${className}`.trim()}>{children}</Link>;
+}
+
+/* ─── Skeleton ───────────────────────────────────────────────────── */
+export function Skeleton({ height = 20, width = "100%", style = {} }) {
+  return (
+    <div
+      className="vg-skeleton"
+      style={{ height, width, ...style }}
+    />
+  );
+}
+
+/* ─── Error Banner ───────────────────────────────────────────────── */
+export function ErrorBanner({ message, onRetry }) {
+  return (
+    <div className="vg-error-banner">
+      <span>⚠</span>
+      <div style={{ flex: 1 }}>
+        <span>{message}</span>
+        {onRetry && (
+          <button
+            className="vg-btn-ghost"
+            onClick={onRetry}
+            style={{ marginLeft: "12px", minHeight: "28px", padding: "0 10px", fontSize: "0.8rem" }}
+          >
+            Retry
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }

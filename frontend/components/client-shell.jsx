@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
-import { Topbar } from "./ui.jsxx";
+import { Topbar } from "./ui";
 import { clearStoredSession, getStoredSession } from "../lib/auth.js";
 
 export function ClientShell({ children }) {

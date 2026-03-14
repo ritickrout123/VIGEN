@@ -1,3 +1,4 @@
+from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,23 +33,33 @@ class AuthService:
         session.add(user)
         await session.commit()
         await session.refresh(user)
-        return AuthService._token_response(user)
+        return await AuthService._token_response(session, user)
 
     @staticmethod
     async def login(session: AsyncSession, payload: LoginRequest) -> TokenPairResponse:
         user = await session.scalar(select(User).where(User.email == payload.email))
         if not user or not verify_password(payload.password, user.password_hash):
             raise ValueError("Invalid credentials")
-        return AuthService._token_response(user)
+        return await AuthService._token_response(session, user)
 
     @staticmethod
-    def refresh(user: User) -> TokenPairResponse:
-        return AuthService._token_response(user)
+    async def refresh(session: AsyncSession, user: User, current_jti: str) -> TokenPairResponse:
+        if user.refresh_token_jti != current_jti:
+            # Reuse detected or token revoked
+            user.refresh_token_jti = None
+            await session.commit()
+            raise ValueError("Invalid or expired refresh token")
+        return await AuthService._token_response(session, user)
 
     @staticmethod
-    def _token_response(user: User) -> TokenPairResponse:
+    async def _token_response(session: AsyncSession, user: User) -> TokenPairResponse:
+        jti = str(uuid4())
         access_token = create_access_token(user.id, user.email, user.role)
-        refresh_token = create_refresh_token(user.id, user.email, user.role)
+        refresh_token = create_refresh_token(user.id, user.email, user.role, jti)
+
+        user.refresh_token_jti = jti
+        await session.commit()
+
         return TokenPairResponse(
             access_token=access_token,
             refresh_token=refresh_token,
